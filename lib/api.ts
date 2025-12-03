@@ -1,5 +1,5 @@
 // API Configuration and Helpers
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const API_BASE_URL = ((globalThis as any).process?.env?.NEXT_PUBLIC_API_URL as string) || "http://localhost:5000/api"
 
 interface FetchOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>
@@ -15,10 +15,38 @@ class ApiError extends Error {
   }
 }
 
+// Helpers to persist and read auth token from localStorage
+export function setAuthToken(token?: string | null) {
+  if (typeof window === "undefined") return
+  if (token) localStorage.setItem("auth_token", token)
+  else localStorage.removeItem("auth_token")
+}
+
+function getAuthToken(): string | null {
+  if (typeof window === "undefined") return null
+  return localStorage.getItem("auth_token")
+}
+
+function getAuthHeaders(): Record<string, string> {
+  const token = getAuthToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+// Build full URL robustly to avoid duplicate segments like /api/api
+function buildUrl(path: string) {
+  const base = API_BASE_URL.replace(/\/$/, "")
+  let p = path.startsWith("/") ? path : `/${path}`
+  // If base already ends with /api and the path also starts with /api, remove the duplicate
+  if (base.endsWith("/api") && p.startsWith("/api")) {
+    p = p.replace(/^\/api/, "")
+  }
+  return `${base}${p}`
+}
+
 async function fetchApi<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
   const { params, ...fetchOptions } = options
 
-  let url = `${API_BASE_URL}${endpoint}`
+  let url = buildUrl(endpoint)
   if (params) {
     const searchParams = new URLSearchParams()
     Object.entries(params).forEach(([key, value]) => {
@@ -32,12 +60,18 @@ async function fetchApi<T>(endpoint: string, options: FetchOptions = {}): Promis
     }
   }
 
+  const tokenHeaders = getAuthHeaders()
+
+  // Normalize headers to a plain object to satisfy HeadersInit typing
+  const mergedHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...tokenHeaders as Record<string, string>,
+    ...(fetchOptions.headers as Record<string, string> | undefined || {}),
+  }
+
   const response = await fetch(url, {
     ...fetchOptions,
-    headers: {
-      "Content-Type": "application/json",
-      ...fetchOptions.headers,
-    },
+    headers: mergedHeaders as HeadersInit,
   })
 
   if (!response.ok) {
@@ -62,11 +96,12 @@ export const productsApi = {
 
   getById: (id: number) => fetchApi<any>(`/products/${id}`),
 
-  create: (data: FormData) =>
-    fetch(`${API_BASE_URL}/products`, {
+  // Backend expects JSON payload for product creation
+  create: (data: any) =>
+    fetchApi(`/products`, {
       method: "POST",
-      body: data,
-    }).then((res) => res.json()),
+      body: JSON.stringify(data),
+    }),
 
   update: (id: number, data: any) =>
     fetchApi(`/products/${id}`, {
@@ -123,17 +158,23 @@ export const ordersApi = {
 
 // Images API
 export const imagesApi = {
-  getUrl: (id: number) => `${API_BASE_URL}/images/${id}`,
+  getUrl: (id: number) => buildUrl(`/images/${id}`),
 
-  upload: (productId: number, file: File) => {
+  upload: (productId: number, file: File, opts?: { idImagen?: number; originalUrl?: string }) => {
     const formData = new FormData()
     formData.append("file", file)
-    formData.append("product_id", String(productId))
-    return fetch(`${API_BASE_URL}/images`, {
+    // Backend expects idProducto and optionally idImagen and originalUrl
+    formData.append("idProducto", String(productId))
+    if (opts?.idImagen) formData.append("idImagen", String(opts.idImagen))
+    if (opts?.originalUrl) formData.append("originalUrl", opts.originalUrl)
+    return fetch(buildUrl(`/images`), {
       method: "POST",
+      headers: getAuthHeaders(),
       body: formData,
     }).then((res) => res.json())
   },
+
+  getByProduct: (productId: number) => fetchApi(`/images/product/${productId}`),
 
   delete: (id: number) =>
     fetchApi(`/images/${id}`, {
@@ -162,8 +203,9 @@ export const ragApi = {
   searchMultimodal: (file: File) => {
     const formData = new FormData()
     formData.append("file", file)
-    return fetch(`${API_BASE_URL}/api/rag/search/multimodal`, {
+    return fetch(buildUrl(`/api/rag/search/multimodal`), {
       method: "POST",
+      headers: getAuthHeaders(),
       body: formData,
     }).then((res) => res.json())
   },
@@ -174,8 +216,9 @@ export const ragApi = {
     if (metadata) {
       formData.append("metadata", JSON.stringify(metadata))
     }
-    return fetch(`${API_BASE_URL}/api/rag/ingest/document`, {
+    return fetch(buildUrl(`/api/rag/ingest/document`), {
       method: "POST",
+      headers: getAuthHeaders(),
       body: formData,
     }).then((res) => res.json())
   },
@@ -186,8 +229,9 @@ export const ragApi = {
     if (metadata) {
       formData.append("metadata", JSON.stringify(metadata))
     }
-    return fetch(`${API_BASE_URL}/api/rag/ingest/image`, {
+    return fetch(buildUrl(`/api/rag/ingest/image`), {
       method: "POST",
+      headers: getAuthHeaders(),
       body: formData,
     }).then((res) => res.json())
   },

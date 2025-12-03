@@ -72,50 +72,14 @@ export function MultimodalSearch() {
       setResults(data.results || data)
     } catch (error) {
       console.error("Multimodal search error:", error)
-      // Demo results
+      // Demo results: use placeholder images — actual product images will come from the backend
       setResults([
-        {
-          id: "img-1",
-          url: "/producto-similar-1.jpg",
-          title: "Producto Similar 1",
-          score: 0.94,
-          product_id: 1,
-        },
-        {
-          id: "img-2",
-          url: "/producto-similar-2.jpg",
-          title: "Producto Similar 2",
-          score: 0.89,
-          product_id: 2,
-        },
-        {
-          id: "img-3",
-          url: "/producto-similar-3.jpg",
-          title: "Producto Similar 3",
-          score: 0.85,
-          product_id: 3,
-        },
-        {
-          id: "img-4",
-          url: "/producto-similar-4.jpg",
-          title: "Producto Similar 4",
-          score: 0.78,
-          product_id: 4,
-        },
-        {
-          id: "img-5",
-          url: "/producto-similar-5.jpg",
-          title: "Producto Similar 5",
-          score: 0.72,
-          product_id: 5,
-        },
-        {
-          id: "img-6",
-          url: "/producto-similar-6.jpg",
-          title: "Producto Similar 6",
-          score: 0.68,
-          product_id: 6,
-        },
+        { id: "img-1", url: "/placeholder.svg", title: "Producto Similar 1", score: 0.94, product_id: 1 },
+        { id: "img-2", url: "/placeholder.svg", title: "Producto Similar 2", score: 0.89, product_id: 2 },
+        { id: "img-3", url: "/placeholder.svg", title: "Producto Similar 3", score: 0.85, product_id: 3 },
+        { id: "img-4", url: "/placeholder.svg", title: "Producto Similar 4", score: 0.78, product_id: 4 },
+        { id: "img-5", url: "/placeholder.svg", title: "Producto Similar 5", score: 0.72, product_id: 5 },
+        { id: "img-6", url: "/placeholder.svg", title: "Producto Similar 6", score: 0.68, product_id: 6 },
       ])
       toast.success("Búsqueda completada")
     } finally {

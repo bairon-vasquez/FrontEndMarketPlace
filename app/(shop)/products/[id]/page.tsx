@@ -40,9 +40,9 @@ export default function ProductPage({ params }: ProductPageProps) {
           category_id: 1,
           stock: 15,
           images: [
-            { id: 1, url: "/product-premium-view-1.jpg" },
-            { id: 2, url: "/product-premium-view-2.jpg" },
-            { id: 3, url: "/product-premium-view-3.jpg" },
+            { id: 1, url: "/placeholder.svg" },
+            { id: 2, url: "/placeholder.svg" },
+            { id: 3, url: "/placeholder.svg" },
           ],
           created_at: new Date().toISOString(),
         })
