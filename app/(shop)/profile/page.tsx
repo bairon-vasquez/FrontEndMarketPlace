@@ -3,26 +3,60 @@
 import type React from "react"
 
 import { useState } from "react"
+import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { User, Mail, Lock, Save, ArrowLeft } from "lucide-react"
+import { User, Mail, Lock, Save, ArrowLeft, Plus, Trash2, Edit } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useStore } from "@/providers/store-provider"
+import { usersApi } from "@/lib/api"
 import { toast } from "sonner"
 import Link from "next/link"
 
 export default function ProfilePage() {
   const router = useRouter()
-  const { state } = useStore()
+  const { state, login } = useStore()
   const [isLoading, setIsLoading] = useState(false)
 
   const [profileData, setProfileData] = useState({
     name: state.user?.name || "",
     email: state.user?.email || "",
   })
+
+  const [profileAddresses, setProfileAddresses] = useState<any[]>(() => {
+    try {
+      return Array.isArray(state.user?.direcciones) ? state.user?.direcciones : []
+    } catch {
+      return []
+    }
+  })
+
+  // keep profileAddresses in sync when the user in the store changes (e.g. after login)
+  useEffect(() => {
+    try {
+      setProfileAddresses(Array.isArray(state.user?.direcciones) ? state.user?.direcciones : [])
+    } catch {
+      // ignore
+    }
+  }, [state.user])
+
+  const addEmptyAddress = () => {
+    setProfileAddresses((s) => [
+      ...s,
+      { idDireccion: 0, pais: "", ciudad: "", direccion: "", tipo: "", idUsuario: state.user?.id ?? null },
+    ])
+  }
+
+  const updateAddress = (index: number, patch: Record<string, any>) => {
+    setProfileAddresses((s) => s.map((a, i) => (i === index ? { ...a, ...patch } : a)))
+  }
+
+  const removeAddress = (index: number) => {
+    setProfileAddresses((s) => s.filter((_, i) => i !== index))
+  }
 
   const [passwordData, setPasswordData] = useState({
     currentPassword: "",
@@ -40,8 +74,25 @@ export default function ProfilePage() {
     setIsLoading(true)
 
     try {
-      // Simular llamada API
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const userId = state.user?.id
+      if (!userId) throw new Error("Usuario no autenticado")
+
+      const payload: Record<string, any> = {}
+      if (profileData.name) payload.nombre = profileData.name
+      if (profileData.email) payload.email = profileData.email
+
+      const res = await usersApi.update(userId, payload)
+      const raw = res?.user ?? res
+
+      const mapped = {
+        id: Number(raw?.idUsuario ?? raw?.id ?? raw?._id ?? state.user?.id ?? 0),
+        email: raw?.email ?? raw?.correo ?? profileData.email,
+        name: raw?.nombre ?? raw?.name ?? profileData.name,
+         role: (raw?.role ?? raw?.rol ?? state.user?.role ?? "user") as "user" | "admin",
+         direcciones: raw?.direcciones ?? profileAddresses ?? state.user?.direcciones ?? [],
+      }
+
+      login(mapped)
       toast.success("Perfil actualizado correctamente")
     } catch {
       toast.error("Error al actualizar el perfil")
@@ -66,7 +117,28 @@ export default function ProfilePage() {
     setIsLoading(true)
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const userId = state.user?.id
+      if (!userId) throw new Error("Usuario no autenticado")
+
+      // Call dedicated password-change endpoint which requires current + new + confirm
+      const payload = {
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+        confirmPassword: passwordData.confirmPassword,
+      }
+      const res = await usersApi.changePassword(userId, payload)
+      // If backend returns updated user, update store
+      const raw = res?.user ?? res
+      if (raw) {
+        const mapped = {
+          id: Number(raw?.idUsuario ?? raw?.id ?? raw?._id ?? state.user?.id ?? 0),
+          email: raw?.email ?? raw?.correo ?? state.user?.email,
+          name: raw?.nombre ?? raw?.name ?? state.user?.name,
+           role: (raw?.role ?? raw?.rol ?? state.user?.role ?? "user") as "user" | "admin",
+           direcciones: raw?.direcciones ?? profileAddresses ?? state.user?.direcciones ?? [],
+        }
+        login(mapped)
+      }
       toast.success("Contraseña actualizada correctamente")
       setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" })
     } catch {
@@ -95,6 +167,7 @@ export default function ProfilePage() {
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="profile">Información Personal</TabsTrigger>
             <TabsTrigger value="security">Seguridad</TabsTrigger>
+            <TabsTrigger value="addresses">Direcciones</TabsTrigger>
           </TabsList>
 
           <TabsContent value="profile">
@@ -144,6 +217,96 @@ export default function ProfilePage() {
                     {isLoading ? "Guardando..." : "Guardar Cambios"}
                   </Button>
                 </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="addresses">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Edit className="h-5 w-5" />
+                  Mis Direcciones
+                </CardTitle>
+                <CardDescription>Gestiona tus direcciones de envío</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {profileAddresses.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No hay direcciones registradas.</p>
+                  )}
+
+                  {profileAddresses.map((addr, idx) => (
+                    <div key={idx} className="rounded-lg border p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-sm font-medium">{addr.tipo || `Dirección ${idx + 1}`}</div>
+                        <div className="flex items-center gap-2">
+                          <Button variant="ghost" size="icon" onClick={() => removeAddress(idx)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-2">
+                        <div className="space-y-2">
+                          <Label>Tipo</Label>
+                          <Input value={addr.tipo || ""} onChange={(e) => updateAddress(idx, { tipo: e.target.value })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Dirección</Label>
+                          <Input value={addr.direccion || ""} onChange={(e) => updateAddress(idx, { direccion: e.target.value })} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-2">
+                            <Label>Ciudad</Label>
+                            <Input value={addr.ciudad || ""} onChange={(e) => updateAddress(idx, { ciudad: e.target.value })} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>País</Label>
+                            <Input value={addr.pais || ""} onChange={(e) => updateAddress(idx, { pais: e.target.value })} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="flex gap-2">
+                    <Button type="button" onClick={addEmptyAddress}>
+                      <Plus className="mr-2 h-4 w-4" /> Agregar dirección
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={async () => {
+                        setIsLoading(true)
+                        try {
+                          const userId = state.user?.id
+                          if (!userId) throw new Error("Usuario no autenticado")
+                          const res = await usersApi.update(userId, { direcciones: profileAddresses })
+                          const raw = res?.user ?? res
+                          if (raw) {
+                            const mapped = {
+                              id: Number(raw?.idUsuario ?? raw?.id ?? raw?._id ?? state.user?.id ?? 0),
+                              email: raw?.email ?? raw?.correo ?? state.user?.email,
+                              name: raw?.nombre ?? raw?.name ?? state.user?.name,
+                               role: (raw?.role ?? raw?.rol ?? state.user?.role ?? "user") as "user" | "admin",
+                               direcciones: raw?.direcciones ?? state.user?.direcciones ?? [],
+                            }
+                            login(mapped)
+                          }
+                          toast.success("Direcciones guardadas correctamente")
+                        } catch (err) {
+                          console.error(err)
+                          toast.error("Error al guardar direcciones")
+                        } finally {
+                          setIsLoading(false)
+                        }
+                      }}
+                    >
+                      Guardar direcciones
+                    </Button>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

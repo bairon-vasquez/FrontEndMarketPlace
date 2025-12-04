@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useStore } from "@/providers/store-provider"
-import { authApi } from "@/lib/api"
+import { authApi, setAuthToken } from "@/lib/api"
 import { toast } from "sonner"
 
 export function LoginForm() {
@@ -45,26 +45,36 @@ export function LoginForm() {
 
     setLoading(true)
     try {
-      const response = await authApi.login(formData)
-      login(response.user)
+      // Backend expects 'contrasena' (or 'password'); send both-safe field
+      const payload = { email: formData.email, contrasena: formData.password }
+      const response = await authApi.login(payload as any)
+
+      // If backend returns a token, persist it
+      if (response?.token) {
+        setAuthToken(response.token)
+      }
+
+      // Normalize the returned user shape to our frontend User
+      const raw = response?.user ?? response
+      const mappedUser = {
+        id: Number(raw?.idUsuario ?? raw?.id ?? raw?._id ?? 0),
+        email: raw?.email ?? raw?.correo ?? formData.email,
+        name: raw?.nombre ?? raw?.name ?? (raw?.email ? String(raw.email).split("@")[0] : formData.email.split("@")[0]),
+        role: (raw?.role ?? raw?.rol ?? "user") as "user" | "admin",
+        direcciones: raw?.direcciones ?? [],
+      }
+
+      login(mappedUser)
       toast.success("¡Bienvenido de vuelta!", {
-        description: `Hola, ${response.user.name}`,
+        description: `Hola, ${mappedUser.name}`,
       })
       router.push("/")
     } catch (error) {
       console.error("Login error:", error)
-      // Demo: simulate successful login
-      const mockUser = {
-        id: 1,
-        email: formData.email,
-        name: formData.email.split("@")[0],
-        role: formData.email.includes("admin") ? ("admin" as const) : ("user" as const),
-      }
-      login(mockUser)
-      toast.success("¡Bienvenido de vuelta!", {
-        description: `Hola, ${mockUser.name}`,
-      })
-      router.push("/")
+      // Show a helpful error to the user
+      // ApiError from fetchApi has a message we can show; fallback to generic
+      const msg = (error && (error as any).message) || "Error al iniciar sesión"
+      toast.error(msg)
     } finally {
       setLoading(false)
     }

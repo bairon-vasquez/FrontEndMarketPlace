@@ -274,6 +274,22 @@ export const imagesApi = {
     }),
 }
 
+// Users API
+export const usersApi = {
+  // update user by id (PUT or PATCH)
+  update: (userId: number | string, data: Record<string, any>) =>
+    fetchApi(`/users/${userId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  // change password using dedicated endpoint
+  changePassword: (userId: number | string, payload: { currentPassword: string; newPassword: string; confirmPassword: string }) =>
+    fetchApi(`/users/${userId}/password`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+}
+
 // RAG API
 export const ragApi = {
   query: (data: { query: string; top_k?: number }) =>

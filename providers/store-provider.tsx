@@ -26,6 +26,7 @@ export interface User {
   email: string
   name: string
   role: "user" | "admin"
+  direcciones?: any[]
 }
 
 export interface Category {
