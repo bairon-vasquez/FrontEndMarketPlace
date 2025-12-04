@@ -8,6 +8,7 @@ import { Search, Loader2, Sparkles, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Badge } from "@/components/ui/badge"
@@ -32,6 +33,7 @@ export function SemanticSearch() {
   const [imageResults, setImageResults] = useState<{ url: string; title?: string; score?: number }[] | null>(null)
   const [mode, setMode] = useState<"text" | "images">("text")
   const [showSources, setShowSources] = useState(false)
+  const [topK, setTopK] = useState(6)
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,12 +45,12 @@ export function SemanticSearch() {
 
     try {
       if (mode === "text") {
-        const data = await ragApi.query({ query, top_k: 5 })
+        const data = await ragApi.query({ query, top_k: topK })
         setResult(data)
       } else {
         // images mode
         // backend expects { index, question, k }
-        const data = await ragApi.imagesText({ index: "default", question: query, k: 6 })
+        const data = await ragApi.imagesText({ index: "default", question: query, k: topK })
         // Debug: log raw response so we can adapt to the exact schema
         console.debug("rag.imagesText raw response:", data)
 
@@ -82,6 +84,7 @@ export function SemanticSearch() {
         } else if (Array.isArray(data?.results)) {
           imgs = data.results
             .map((it: any) => {
+              console.debug("Procesando resultado individual:", it)
               // Backend serializes DB rows; attempt many common field names
               const candidate =
                 it.url ||
@@ -107,7 +110,11 @@ export function SemanticSearch() {
                 null
 
               const url = normalize(candidate)
-              const title = it.title || it.nombre || it.name || it.nombreArchivo || it.titulo || it.id || it._id
+              
+              // Usar ID del producto como título
+              const title = `Producto #${it.idProducto || it.id_producto || it.productId || it.product_id || it.id || it._id || 'N/A'}`
+              
+              console.debug("Título extraído:", title)
               return url ? { url, title, score: it.score ?? it.similarity ?? it.rank } : null
             })
             .filter(Boolean)
@@ -205,6 +212,21 @@ export function SemanticSearch() {
                   disabled={loading}
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="topk">Cantidad de Resultados</Label>
+              <Select value={String(topK)} onValueChange={(v) => setTopK(Number(v))}>
+                <SelectTrigger id="topk">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="3">3 resultados</SelectItem>
+                  <SelectItem value="6">6 resultados</SelectItem>
+                  <SelectItem value="9">9 resultados</SelectItem>
+                  <SelectItem value="12">12 resultados</SelectItem>
+                  <SelectItem value="15">15 resultados</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <Button type="submit" disabled={loading || !query.trim()}>
               {loading ? (
