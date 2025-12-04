@@ -43,6 +43,64 @@ function buildUrl(path: string) {
   return `${base}${p}`
 }
 
+// Transform backend product shape to frontend Product shape
+function transformProduct(raw: any) {
+  if (!raw) return null
+  const id = raw.idProducto ?? raw.id ?? Number(raw._id) ?? 0
+  const name = raw.nombre ?? raw.name ?? ""
+  const description = raw.descripcion ?? raw.description ?? ""
+  const price = raw.precio !== undefined ? Number(raw.precio) : Number(raw.price ?? 0)
+  const category_id = raw.idCategoria ?? raw.category_id ?? null
+  const stock = raw.stock ?? 0
+  const created_at = raw.fechaCreacion ?? raw.created_at ?? new Date().toISOString()
+  const imagesRaw: any[] = raw.imagenesProductos ?? raw.images ?? []
+  const images = Array.isArray(imagesRaw)
+    ? imagesRaw.map((img) => {
+        // img can be a number (id), a string id, or an object like { idImagen, url }
+        if (img == null) return null
+        // numeric or numeric string -> use images endpoint
+        if (typeof img === "number" || (typeof img === "string" && /^\d+$/.test(img))) {
+          const idNum = Number(img)
+          return { id: idNum, url: buildUrl(`/images/${idNum}`) }
+        }
+
+        // object case: prefer an explicit id field (idImagen, id, idImage)
+        if (typeof img === "object") {
+          const idField = img.idImagen ?? img.idImagenProducto ?? img.idImagenProducto ?? img.id ?? img.idImage ?? img.idImagen
+          if (idField != null) {
+            const idNum = Number(idField)
+            if (!Number.isNaN(idNum)) return { id: idNum, url: buildUrl(`/images/${idNum}`) }
+          }
+
+          // if object has a direct url, try to normalize it to an absolute URL
+          const candidateUrl = img.url ?? img.originalUrl ?? img.path
+          if (typeof candidateUrl === "string") {
+            // if already absolute (http/https) or starts with /, use as-is (but if it is relative backend path, try to prefix)
+            if (/^https?:\/\//i.test(candidateUrl) || candidateUrl.startsWith("/")) {
+              return { id: 0, url: candidateUrl }
+            }
+            // relative path like ../../data/imgs/imagen2.jpg -> try to serve through images endpoint if id missing
+            // fallback: return it as-is (browser will try to resolve relative to current page)
+            return { id: 0, url: candidateUrl }
+          }
+        }
+
+        return null
+      }).filter(Boolean)
+    : []
+
+  return {
+    id: Number(id),
+    name,
+    description,
+    price,
+    category_id: category_id != null ? Number(category_id) : null,
+    stock: Number(stock),
+    images,
+    created_at,
+  }
+}
+
 async function fetchApi<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
   const { params, ...fetchOptions } = options
 
@@ -92,9 +150,20 @@ export const productsApi = {
     max_price?: number
     available_only?: boolean
     search?: string
-  }) => fetchApi<{ products: any[]; total: number; page: number; pages: number }>("/products", { params }),
+  }) =>
+    fetchApi<any>("/products", { params }).then((res) => {
+      // backend returns { products: [...], count, status }
+      const items = res?.products ?? res?.data ?? []
+      const mapped = Array.isArray(items) ? items.map(transformProduct).filter(Boolean) : []
+      return { products: mapped, total: res?.count ?? mapped.length, page: res?.page ?? 1, pages: res?.pages ?? 1 }
+    }),
 
-  getById: (id: number) => fetchApi<any>(`/products/${id}`),
+  getById: (id: number) =>
+    fetchApi<any>(`/products/${id}`).then((res) => {
+      // backend may return { product: {...}, status }
+      const raw = res?.product ?? res
+      return transformProduct(raw)
+    }),
 
   // Backend expects JSON payload for product creation
   create: (data: any) =>
@@ -117,8 +186,31 @@ export const productsApi = {
 
 // Categories API
 export const categoriesApi = {
-  getAll: () => fetchApi<any[]>("/categories"),
-  getTree: () => fetchApi<any[]>("/categories/tree"),
+  // normalize category shape from backend to frontend Category
+  getAll: () =>
+    fetchApi<any>("/categories").then((res) => {
+      const items = res?.categories ?? res ?? []
+      return Array.isArray(items)
+        ? items.map((c: any) => ({
+            id: Number(c.idCategoria ?? c.id ?? c.idCategory ?? 0),
+            name: c.nombre ?? c.name ?? "",
+            parent_id: c.parent_id ?? c.parentId ?? c.idPadre ?? null,
+          }))
+        : []
+    }),
+  getTree: () =>
+    fetchApi<any>("/categories/tree").then((res) => {
+      const tree = res?.category_tree ?? res ?? []
+      const transform = (node: any): any => ({
+        id: Number(node.idCategoria ?? node.id ?? 0),
+        name: node.nombre ?? node.name ?? "",
+        parent_id: node.parent_id ?? node.idPadre ?? null,
+        children: Array.isArray(node.children || node.subcategories || node.children_tree)
+          ? (node.children || node.subcategories || node.children_tree).map(transform)
+          : undefined,
+      })
+      return Array.isArray(tree) ? tree.map(transform) : []
+    }),
   create: (data: { name: string; parent_id?: number }) =>
     fetchApi("/categories", {
       method: "POST",
@@ -174,7 +266,7 @@ export const imagesApi = {
     }).then((res) => res.json())
   },
 
-  getByProduct: (productId: number) => fetchApi(`/images/product/${productId}`),
+  getByProduct: (productId: number) => fetchApi(`/images/${productId}`),
 
   delete: (id: number) =>
     fetchApi(`/images/${id}`, {

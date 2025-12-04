@@ -2,6 +2,7 @@ import Link from "next/link"
 import { ArrowRight, Sparkles, Zap, Shield, Search, Brain, ImageIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { CategoryExplorer } from "@/components/categories/category-explorer"
 
 const features = [
   {
@@ -26,12 +27,7 @@ const features = [
   },
 ]
 
-const categories = [
-  { name: "Electrónica", image: "/modern-tech-devices.png", href: "/products?category=1" },
-  { name: "Ropa", image: "/diverse-fashion-apparel.png", href: "/products?category=2" },
-  { name: "Hogar", image: "/home-decor-furniture-living-room.jpg", href: "/products?category=3" },
-  { name: "Deportes", image: "/sports-equipment-fitness-gear.jpg", href: "/products?category=4" },
-]
+// Categories images are fetched from backend via CategoryExplorer
 
 export default function HomePage() {
   return (
@@ -95,27 +91,7 @@ export default function HomePage() {
             <h2 className="mb-4 text-3xl font-bold">Explora por Categoría</h2>
             <p className="text-muted-foreground">Encuentra exactamente lo que buscas navegando nuestras categorías</p>
           </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {categories.map((category) => (
-              <Link key={category.name} href={category.href}>
-                <Card className="group cursor-pointer overflow-hidden transition-all hover:shadow-lg">
-                  <CardContent className="p-0">
-                    <div className="relative aspect-[3/2] overflow-hidden">
-                      <img
-                        src={category.image || "/placeholder.svg"}
-                        alt={category.name}
-                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
-                      <div className="absolute bottom-0 left-0 right-0 p-4">
-                        <h3 className="text-lg font-semibold text-foreground">{category.name}</h3>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
+          <CategoryExplorer />
         </div>
       </section>
 
