@@ -308,6 +308,13 @@ export const ragApi = {
       body: JSON.stringify(data),
     }),
 
+  // image-text retrieval: returns images relevant to a text query
+  imagesText: (data: { index: string; question: string; k?: number }) =>
+    fetchApi<any>("/api/rag/images-text", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
   searchMultimodal: (file: File) => {
     const formData = new FormData()
     formData.append("file", file)
